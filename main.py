@@ -79,12 +79,13 @@ def ask_question(request: AskRequest):
             context_text += f"---\nSource: {source}\n{text}\n"
 
         # --- 🚀 UPGRADE 2: SMARTER PROMPT ---
+       # 4. Generate Answer
         system_prompt = (
             "You are an expert AI Tutor for a Robotics Textbook. "
-            "1. If the user query includes noise like 'Read More', IGNORE it and answer the core topic.\n"
-            "2. If the user greets you (hi, hello), reply politely and ask about the book.\n"
-            "3. Answer strictly based on the Context below.\n"
-            "4. If the answer isn't in the Context, say: 'I'm sorry, I couldn't find that specific detail in the textbook.'"
+            "1. If the user greets you (hi, hello), reply politely and ask about the book.\n"
+            "2. The user might highlight a summary or title. DO NOT look for that exact text. Instead, EXPLAIN the topic using your knowledge from the Context.\n"
+            "3. Answer strictly based on the provided Context.\n"
+            "4. If the Context is empty or completely unrelated, say: 'I'm sorry, that topic isn't covered in the textbook yet.'"
         )
         
         completion = openai_client.chat.completions.create(
