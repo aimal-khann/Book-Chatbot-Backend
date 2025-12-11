@@ -18,8 +18,6 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 COLLECTION_NAME = "humanoid_ai_book"
 EMBEDDING_MODEL = "text-embedding-3-small"
 CHAT_MODEL = "gpt-4o"
-
-# --- 🚀 UPGRADE 1: READ MORE ---
 TOP_K_CHUNKS = 10 
 
 app = FastAPI()
@@ -78,14 +76,14 @@ def ask_question(request: AskRequest):
                 sources.append({"title": source})
             context_text += f"---\nSource: {source}\n{text}\n"
 
-        # --- 🚀 UPGRADE 2: SMARTER PROMPT ---
-       # 4. Generate Answer
+        # --- 🚀 FINAL UPGRADE: Handle Fragments ---
         system_prompt = (
             "You are an expert AI Tutor for a Robotics Textbook. "
             "1. If the user greets you (hi, hello), reply politely and ask about the book.\n"
-            "2. The user might highlight a summary or title. DO NOT look for that exact text. Instead, EXPLAIN the topic using your knowledge from the Context.\n"
-            "3. Answer strictly based on the provided Context.\n"
-            "4. If the Context is empty or completely unrelated, say: 'I'm sorry, that topic isn't covered in the textbook yet.'"
+            "2. If the user provides a short text fragment or sentence from the book (e.g., 'Apply your knowledge...'), "
+            "DO NOT just look for that text. Instead, EXPLAIN the concept discussed in that fragment using the Context.\n"
+            "3. Answer strictly based on the Context below.\n"
+            "4. If the Context is totally unrelated, say: 'I'm sorry, I couldn't find that specific detail in the textbook.'"
         )
         
         completion = openai_client.chat.completions.create(
