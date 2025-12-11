@@ -19,20 +19,17 @@ COLLECTION_NAME = "humanoid_ai_book"
 EMBEDDING_MODEL = "text-embedding-3-small"
 CHAT_MODEL = "gpt-4o"
 
-# --- 🚀 UPGRADE: Read 10 chunks instead of 5 ---
+# --- 🚀 UPGRADE 1: READ MORE ---
 TOP_K_CHUNKS = 10 
 
-# Initialize App & Clients
 app = FastAPI()
 
-# Robust Client Initialization
 try:
     qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
     openai_client = OpenAI(api_key=OPENAI_API_KEY)
 except Exception as e:
     logging.error(f"Failed to initialize clients: {e}")
 
-# CORS (Allows your website to talk to this brain)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -51,48 +48,43 @@ def home():
 
 @app.post("/ask")
 def ask_question(request: AskRequest):
-    # Support both "query" and "message" inputs
     user_query = request.query or request.message
     
     if not user_query:
         raise HTTPException(status_code=400, detail="Query cannot be empty")
 
     try:
-        # 1. Embed Query
+        # 1. Embed
         emb_res = openai_client.embeddings.create(
             input=[user_query],
             model=EMBEDDING_MODEL
         )
         query_vector = emb_res.data[0].embedding
 
-        # 2. Search Qdrant
+        # 2. Search
         search_results = qdrant_client.query_points(
             collection_name=COLLECTION_NAME,
             query=query_vector,
             limit=TOP_K_CHUNKS
         ).points
 
-        # 3. Build Context
+        # 3. Context
         context_text = ""
         sources = []
-        
         for hit in search_results:
             text = hit.payload.get("text", "")
             source = hit.payload.get("source", "Unknown")
-            # Only add unique sources
             if source not in [s.get('title') for s in sources]:
                 sources.append({"title": source})
             context_text += f"---\nSource: {source}\n{text}\n"
 
-        # 4. Generate Answer (Smarter, Politer Prompt)
+        # --- 🚀 UPGRADE 2: SMARTER PROMPT ---
         system_prompt = (
             "You are an expert AI Tutor for a Robotics Textbook. "
-            "Your goal is to be helpful, friendly, and accurate.\n\n"
-            "RULES:\n"
-            "1. If the user says 'Hi', 'Hello', or 'Thanks', reply politely and offer help with the book.\n"
-            "2. Answer questions STRICTLY based on the provided Context below.\n"
-            "3. If the answer is not in the Context, say: 'I'm sorry, that topic isn't covered in the textbook yet.'\n"
-            "4. Do not make up information outside the context."
+            "1. If the user query includes noise like 'Read More', IGNORE it and answer the core topic.\n"
+            "2. If the user greets you (hi, hello), reply politely and ask about the book.\n"
+            "3. Answer strictly based on the Context below.\n"
+            "4. If the answer isn't in the Context, say: 'I'm sorry, I couldn't find that specific detail in the textbook.'"
         )
         
         completion = openai_client.chat.completions.create(
@@ -103,13 +95,8 @@ def ask_question(request: AskRequest):
             ]
         )
         
-        answer = completion.choices[0].message.content
-        return {"reply": answer, "sources": sources}
+        return {"reply": completion.choices[0].message.content, "sources": sources}
 
     except Exception as e:
         logging.error(f"Error: {str(e)}")
-        # Return a polite error instead of crashing the frontend
-        return {
-            "reply": "I'm having trouble connecting to my brain right now. Please try again in a moment.",
-            "sources": []
-        }
+        return {"reply": "I'm having trouble connecting right now. Please try again.", "sources": []}
