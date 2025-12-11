@@ -18,6 +18,8 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 COLLECTION_NAME = "humanoid_ai_book"
 EMBEDDING_MODEL = "text-embedding-3-small"
 CHAT_MODEL = "gpt-4o"
+
+# --- FIX 1: Max Memory ---
 TOP_K_CHUNKS = 10 
 
 app = FastAPI()
@@ -51,10 +53,15 @@ def ask_question(request: AskRequest):
     if not user_query:
         raise HTTPException(status_code=400, detail="Query cannot be empty")
 
+    # --- FIX 2: Remove "Read More" Noise ---
+    # This is the magic line that fixes your "I don't know" error
+    clean_query = user_query.replace("Read More", "").strip()
+    logging.info(f"Original: {user_query} -> Clean: {clean_query}")
+
     try:
-        # 1. Embed
+        # 1. Embed CLEAN query
         emb_res = openai_client.embeddings.create(
-            input=[user_query],
+            input=[clean_query],
             model=EMBEDDING_MODEL
         )
         query_vector = emb_res.data[0].embedding
@@ -76,13 +83,12 @@ def ask_question(request: AskRequest):
                 sources.append({"title": source})
             context_text += f"---\nSource: {source}\n{text}\n"
 
-        # --- 🚀 FINAL UPGRADE: Handle Fragments ---
+        # --- FIX 3: Polite Teacher Persona ---
         system_prompt = (
             "You are an expert AI Tutor for a Robotics Textbook. "
             "1. If the user greets you (hi, hello), reply politely and ask about the book.\n"
-            "2. If the user provides a short text fragment or sentence from the book (e.g., 'Apply your knowledge...'), "
-            "DO NOT just look for that text. Instead, EXPLAIN the concept discussed in that fragment using the Context.\n"
-            "3. Answer strictly based on the Context below.\n"
+            "2. If the user highlighted a summary, EXPLAIN the concept using the Context below.\n"
+            "3. Answer strictly based on the Context.\n"
             "4. If the Context is totally unrelated, say: 'I'm sorry, I couldn't find that specific detail in the textbook.'"
         )
         
@@ -90,7 +96,7 @@ def ask_question(request: AskRequest):
             model=CHAT_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Context:\n{context_text}\n\nQuestion: {user_query}"}
+                {"role": "user", "content": f"Context:\n{context_text}\n\nUser Question: {clean_query}"}
             ]
         )
         
