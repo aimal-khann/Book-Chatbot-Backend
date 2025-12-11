@@ -18,9 +18,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 COLLECTION_NAME = "humanoid_ai_book"
 EMBEDDING_MODEL = "text-embedding-3-small"
 CHAT_MODEL = "gpt-4o"
-
-# --- FIX 1: Max Memory ---
-TOP_K_CHUNKS = 10 
+TOP_K_CHUNKS = 10  # Max context
 
 app = FastAPI()
 
@@ -53,8 +51,8 @@ def ask_question(request: AskRequest):
     if not user_query:
         raise HTTPException(status_code=400, detail="Query cannot be empty")
 
-    # --- FIX 2: Remove "Read More" Noise ---
-    # This is the magic line that fixes your "I don't know" error
+    # --- THE FIX IS HERE ---
+    # Remove "Read More" noise from the input string
     clean_query = user_query.replace("Read More", "").strip()
     logging.info(f"Original: {user_query} -> Clean: {clean_query}")
 
@@ -66,7 +64,7 @@ def ask_question(request: AskRequest):
         )
         query_vector = emb_res.data[0].embedding
 
-        # 2. Search
+        # 2. Search Qdrant
         search_results = qdrant_client.query_points(
             collection_name=COLLECTION_NAME,
             query=query_vector,
@@ -83,12 +81,12 @@ def ask_question(request: AskRequest):
                 sources.append({"title": source})
             context_text += f"---\nSource: {source}\n{text}\n"
 
-        # --- FIX 3: Polite Teacher Persona ---
+        # 4. Answer
         system_prompt = (
             "You are an expert AI Tutor for a Robotics Textbook. "
             "1. If the user greets you (hi, hello), reply politely and ask about the book.\n"
-            "2. If the user highlighted a summary, EXPLAIN the concept using the Context below.\n"
-            "3. Answer strictly based on the Context.\n"
+            "2. If the user query is a summary (e.g. from a homepage card), EXPLAIN that concept using the Context.\n"
+            "3. Answer strictly based on the Context below.\n"
             "4. If the Context is totally unrelated, say: 'I'm sorry, I couldn't find that specific detail in the textbook.'"
         )
         
